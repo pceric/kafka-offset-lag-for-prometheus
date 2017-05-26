@@ -1,0 +1,10 @@
+version: '2'
+services:
+    exporter:
+        build:
+            context: .
+        environment:
+            - KAFKA_BROKERS=localhost:9092
+            - PROMETHEUS_ADDR=localhost:7979
+            - REFRESH_INTERVAL=15
+            - DEBUG=true

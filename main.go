@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -108,8 +109,10 @@ func main() {
 									if *debug {
 										log.Printf("Discovered group: %s, topic: %s, partition: %d, offset: %d\n", group, topic, gp, block.Offset)
 									}
+									// Offset will be -1 if the group isn't active on the topic
 									if block.Offset >= 0 {
-										lag := float64(data[gp] - block.Offset)
+										// Because our offset operations aren't atomic we could end up with a negative lag
+										lag := math.Max(float64(data[gp]-block.Offset), 0)
 										OffsetLag.With(prometheus.Labels{"topic": topic, "group": group, "partition": strconv.FormatInt(int64(gp), 10)}).Set(lag)
 									}
 								}

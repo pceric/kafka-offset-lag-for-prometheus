@@ -32,6 +32,7 @@ func init() {
 
 func main() {
 	go func() {
+		var cycle uint8
 		config := sarama.NewConfig()
 		config.ClientID = "kafka-offset-lag-for-prometheus"
 		config.Version = sarama.V0_9_0_0
@@ -74,6 +75,13 @@ func main() {
 					topicSet[topic][partition] = toff
 				}
 			}
+			// Prometheus SDK never TTLs out data points so tmp consumers last
+			// forever. Ugly hack to clean up data points from time to time.
+			if cycle >= 99 {
+				OffsetLag.Reset()
+				cycle = 0
+			}
+			cycle++
 			// Now lookup our group data using the metadata
 			for _, broker := range client.Brokers() {
 				// Sarama plays russian roulette with the brokers

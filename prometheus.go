@@ -24,7 +24,7 @@ var (
 	// LookupHist is a Prometheus histogram of our kafka offset lookup time
 	LookupHist = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
-			Name: "offset_lookup_duration_seconds",
+			Name: "kafka_consumer_group_lag_lookup_duration_seconds",
 			Help: "Histogram for the runtime of the offset request.",
 		},
 	)

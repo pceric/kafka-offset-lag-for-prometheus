@@ -16,13 +16,13 @@ import (
 )
 
 var (
-	inactiveConsumers = flag.Bool("inactive-consumers", false, "Show all consumers including inactive ones.")
-	kafkaBrokers      = flag.String("kafka-brokers", "localhost:9092", "Comma separated list of kafka brokers.")
-	prometheusAddr    = flag.String("prometheus-addr", ":7979", "Prometheus listen interface and port.")
-	refreshInt        = flag.Int("refresh-interval", 15, "Time between offset refreshes in seconds.")
-	saslUser          = flag.String("sasl-user", "", "SASL username.")
-	saslPass          = flag.String("sasl-pass", "", "SASL password.")
-	debug             = flag.Bool("debug", false, "Enable debug output.")
+	activeConsumers = flag.Bool("active-consumers", false, "Show only consumers with an active consumer protocol.")
+	kafkaBrokers    = flag.String("kafka-brokers", "localhost:9092", "Comma separated list of kafka brokers.")
+	prometheusAddr  = flag.String("prometheus-addr", ":7979", "Prometheus listen interface and port.")
+	refreshInt      = flag.Int("refresh-interval", 15, "Time between offset refreshes in seconds.")
+	saslUser        = flag.String("sasl-user", "", "SASL username.")
+	saslPass        = flag.String("sasl-pass", "", "SASL password.")
+	debug           = flag.Bool("debug", false, "Enable debug output.")
 )
 
 type TopicSet map[string]map[int32]int64
@@ -134,9 +134,9 @@ func refreshBroker(broker *sarama.Broker, topicSet TopicSet) {
 		return
 	}
 
-	for group, t := range groupsResponse.Groups {
-		// do we want to see all consumers, not just active ones?
-		if !*inactiveConsumers && t != "consumer" {
+	for group, ptype := range groupsResponse.Groups {
+		// do we want to filter by active consumers?
+		if *activeConsumers && ptype != "consumer" {
 			continue
 		}
 		// This is not very efficient but the kafka API sucks

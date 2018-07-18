@@ -11,9 +11,12 @@ This project is designed to run with Docker.
 `docker-compose up -d`
 
 Use the following ENV vars to change the default options:
+* ACTIVE_ONLY=only show consumers with an active consumer protocol (default false)
 * KAFKA_BROKERS=comma separated list of brokers (default localhost:9092)
 * PROMETHEUS_ADDR=address and port for Prometheus to bind to (default :7979)
 * REFRESH_INTERVAL=how long in seconds between each refresh (default 15)
+* SASL_USER=SASL username if required (default "")
+* SASL_PASS=SASL password if required (default "")
 * DEBUG=true or false (default false)
 
 You may also build and run locally using cli arguments.  See the Dockerfile

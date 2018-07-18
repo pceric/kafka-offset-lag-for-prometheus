@@ -16,9 +16,12 @@ import (
 )
 
 var (
+	activeOnly     = flag.Bool("active-only", false, "Show only consumers with an active consumer protocol.")
 	kafkaBrokers   = flag.String("kafka-brokers", "localhost:9092", "Comma separated list of kafka brokers.")
 	prometheusAddr = flag.String("prometheus-addr", ":7979", "Prometheus listen interface and port.")
 	refreshInt     = flag.Int("refresh-interval", 15, "Time between offset refreshes in seconds.")
+	saslUser       = flag.String("sasl-user", "", "SASL username.")
+	saslPass       = flag.String("sasl-pass", "", "SASL password.")
 	debug          = flag.Bool("debug", false, "Enable debug output.")
 )
 
@@ -39,6 +42,10 @@ func main() {
 		config := sarama.NewConfig()
 		config.ClientID = "kafka-offset-lag-for-prometheus"
 		config.Version = sarama.V0_9_0_0
+		if *saslUser != "" {
+			config.Net.SASL.User = *saslUser
+			config.Net.SASL.Password = *saslPass
+		}
 		client, err := sarama.NewClient(strings.Split(*kafkaBrokers, ","), config)
 
 		if err != nil {
@@ -127,38 +134,39 @@ func refreshBroker(broker *sarama.Broker, topicSet TopicSet) {
 		return
 	}
 
-	for group, t := range groupsResponse.Groups {
-		// we only want active consumers
-		if t == "consumer" {
-			// This is not very efficient but the kafka API sucks
-			for topic, data := range topicSet {
-				offsetsRequest := new(sarama.OffsetFetchRequest)
-				offsetsRequest.Version = 1
-				offsetsRequest.ConsumerGroup = group
-				for partition := range data {
-					offsetsRequest.AddPartition(topic, partition)
-				}
+	for group, ptype := range groupsResponse.Groups {
+		// do we want to filter by active consumers?
+		if *activeOnly && ptype != "consumer" {
+			continue
+		}
+		// This is not very efficient but the kafka API sucks
+		for topic, data := range topicSet {
+			offsetsRequest := new(sarama.OffsetFetchRequest)
+			offsetsRequest.Version = 1
+			offsetsRequest.ConsumerGroup = group
+			for partition := range data {
+				offsetsRequest.AddPartition(topic, partition)
+			}
 
-				offsetsResponse, err := broker.FetchOffset(offsetsRequest)
-				if err != nil {
-					log.Printf("Could not get offset: %s\n", err.Error())
-				}
+			offsetsResponse, err := broker.FetchOffset(offsetsRequest)
+			if err != nil {
+				log.Printf("Could not get offset: %s\n", err.Error())
+			}
 
-				for _, blocks := range offsetsResponse.Blocks {
-					for partition, block := range blocks {
-						if *debug {
-							log.Printf("Discovered group: %s, topic: %s, partition: %d, offset: %d\n", group, topic, partition, block.Offset)
-						}
-						// Offset will be -1 if the group isn't active on the topic
-						if block.Offset >= 0 {
-							// Because our offset operations aren't atomic we could end up with a negative lag
-							lag := math.Max(float64(data[partition]-block.Offset), 0)
+			for _, blocks := range offsetsResponse.Blocks {
+				for partition, block := range blocks {
+					if *debug {
+						log.Printf("Discovered group: %s, topic: %s, partition: %d, offset: %d\n", group, topic, partition, block.Offset)
+					}
+					// Offset will be -1 if the group isn't active on the topic
+					if block.Offset >= 0 {
+						// Because our offset operations aren't atomic we could end up with a negative lag
+						lag := math.Max(float64(data[partition]-block.Offset), 0)
 
-							OffsetLag.With(prometheus.Labels{
-								"topic": topic, "group": group,
-								"partition": strconv.FormatInt(int64(partition), 10),
-							}).Set(lag)
-						}
+						OffsetLag.With(prometheus.Labels{
+							"topic": topic, "group": group,
+							"partition": strconv.FormatInt(int64(partition), 10),
+						}).Set(lag)
 					}
 				}
 			}

@@ -43,6 +43,7 @@ func main() {
 		config.ClientID = "kafka-offset-lag-for-prometheus"
 		config.Version = sarama.V0_9_0_0
 		if *saslUser != "" {
+			config.Net.SASL.Enable = true
 			config.Net.SASL.User = *saslUser
 			config.Net.SASL.Password = *saslPass
 		}

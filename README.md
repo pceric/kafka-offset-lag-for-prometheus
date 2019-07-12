@@ -18,6 +18,7 @@ Use the following ENV vars to change the default options:
 * SASL_USER=SASL username if required (default "")
 * SASL_PASS=SASL password if required (default "")
 * DEBUG=true or false (default false)
+* ALGORITHM=The SASL SCRAM SHA algorithm sha256 or sha512 as mechanism (default "")
 
 You may also build and run locally using cli arguments.  See the Dockerfile
 for build instructions.

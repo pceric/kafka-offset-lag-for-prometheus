@@ -23,6 +23,7 @@ var (
 	saslUser       = flag.String("sasl-user", "", "SASL username.")
 	saslPass       = flag.String("sasl-pass", "", "SASL password.")
 	debug          = flag.Bool("debug", false, "Enable debug output.")
+	algorithm      = flag.String("algorithm", "", "The SASL SCRAM SHA algorithm sha256 or sha512 as mechanism")
 )
 
 type TopicSet map[string]map[int32]int64
@@ -46,6 +47,13 @@ func main() {
 			config.Net.SASL.Enable = true
 			config.Net.SASL.User = *saslUser
 			config.Net.SASL.Password = *saslPass
+		}
+		if *algorithm == "sha512" {
+			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
+			config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA512)
+		} else if *algorithm == "sha256" {
+			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA256} }
+			config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA256)
 		}
 		client, err := sarama.NewClient(strings.Split(*kafkaBrokers, ","), config)
 

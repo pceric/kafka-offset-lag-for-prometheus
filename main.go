@@ -23,7 +23,7 @@ var (
 	saslUser       = flag.String("sasl-user", "", "SASL username.")
 	saslPass       = flag.String("sasl-pass", "", "SASL password.")
 	debug          = flag.Bool("debug", false, "Enable debug output.")
-	algorithm      = flag.String("algorithm", "", "The SASL SCRAM SHA algorithm sha256 or sha512 as mechanism")
+	algorithm      = flag.String("algorithm", "", "The SASL algorithm sha256 or sha512 as mechanism")
 )
 
 type TopicSet map[string]map[int32]int64

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-metrics
+  labels:
+{{ include "kafka-offset-lag-for-prometheus.labels" .  | indent 4 }}
+spec:
+  ports:
+  - port: {{ .Values.metricsPort }}
+    name: metrics
+  clusterIP: None
+  selector:
+    app: {{ .Release.Name }}

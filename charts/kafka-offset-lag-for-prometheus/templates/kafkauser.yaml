@@ -1,0 +1,28 @@
+{{ if .Values.createKafkaUser }}
+apiVersion: kafka.strimzi.io/v1beta1
+kind: KafkaUser
+metadata:
+  labels:
+    strimzi.io/cluster: {{ .Values.kafkaCluster }}
+{{ include "kafka-offset-lag-for-prometheus.labels" .  | indent 4 }}
+  name: {{ .Release.Name }}
+spec:
+  authentication:
+    type: scram-sha-512
+  authorization:
+    type: simple
+    acls:
+    - operation: Describe
+      resource:
+        type: cluster
+    - operation: Describe
+      resource:
+        name: "*"
+        type: group
+        patternType: literal
+    - operation: Describe
+      resource:
+        name: "*"
+        type: topic
+        patternType: literal
+{{ end }}

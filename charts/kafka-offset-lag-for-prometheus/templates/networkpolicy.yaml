@@ -1,0 +1,19 @@
+{{ if .Values.createNetworkPolicy }}
+apiVersion: extensions/v1beta1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+{{ include "kafka-offset-lag-for-prometheus.labels" .  | indent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+  - Ingress
+  ingress:
+{{ toYaml .Values.ingressFromRule | indent 2 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.metricsPort }}
+{{ end }}

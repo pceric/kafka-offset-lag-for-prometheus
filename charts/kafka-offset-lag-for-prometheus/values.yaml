@@ -1,0 +1,41 @@
+#nameOverride -- Overrides release name, prepended by "kafka-offset-lag-for-prometheus"
+nameOverride: ""
+#fullnameOverride -- Overrides release name
+fullnameOverride: ""
+
+#replicaCount -- Kubernetes replica count
+replicaCount: 1
+
+#image -- Docker container image
+image: pceric/kafka-offset-lag-for-prometheus:v1.5@sha256:4f3b7cbf107ca5203bf918628f42c1cfbb553fbdbc9c01601e8a39a2054b4af9
+#pullPolicy -- Docker container image pull policy
+pullPolicy: IfNotPresent
+
+#metricsPort -- The port to use for prometheus metrics endpoint
+metricsPort: 7979
+
+#refreshIntervalSeconds -- The refresh interval used to fetch metrics (in seconds)
+refreshIntervalSeconds: 30
+
+#containerArgs -- Extra arguments passed to the container as --key=value pair
+containerArgs:
+  kafka-brokers: ""
+  algorithm: sha512
+
+#createKafkaUser -- Should a KafkaUser be created (used with Kafka-Operator)
+createKafkaUser: true
+#kafkaCluster -- What KafkaCluster should the KafkaUser have access too?
+kafkaCluster: production
+
+#createNetworkPolicy -- Should a NetworkPolicy be generated (block all incoming network access except prometheus)
+createNetworkPolicy: true
+
+#ingressFromRule -- Network policy ingress rule (default will block all except a prometheus running in a namespace that has the label name: monitoring)
+ingressFromRule:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+      podSelector:
+        matchLabels:
+          app: prometheus

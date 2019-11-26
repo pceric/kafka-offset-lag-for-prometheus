@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kafka-offset-lag-for-prometheus.fullname" . }}
+  labels:
+{{ include "kafka-offset-lag-for-prometheus.labels" .  | indent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+{{ include "kafka-offset-lag-for-prometheus.labels" .  | indent 8 }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image }}"
+          imagePullPolicy: {{ .Values.pullPolicy }}
+          env:
+          - name: SASL_USER
+            value: {{ .Release.Name }}
+          - name: SASL_PASS
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Release.Name }}
+                key: password
+          command:
+          - /go/bin/kafka-offset-lag-for-prometheus
+          - --prometheus-addr=:{{ .Values.metricsPort }}
+          - --refresh-interval={{ .Values.refreshIntervalSeconds }}
+      {{- range $key, $value := .Values.containerArgs }}
+          {{- if $value }}
+          - --{{ $key }}={{ $value }}
+          {{- else }}
+          - --{{ $key }}
+          {{- end }}
+      {{- end }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metricsPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: {{ .Values.metricsPort }}
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: {{ .Values.metricsPort }}

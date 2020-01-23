@@ -16,14 +16,15 @@ import (
 )
 
 var (
-	activeOnly     = flag.Bool("active-only", false, "Show only consumers with an active consumer protocol.")
-	kafkaBrokers   = flag.String("kafka-brokers", "localhost:9092", "Comma separated list of kafka brokers.")
-	prometheusAddr = flag.String("prometheus-addr", ":7979", "Prometheus listen interface and port.")
-	refreshInt     = flag.Int("refresh-interval", 15, "Time between offset refreshes in seconds.")
-	saslUser       = flag.String("sasl-user", "", "SASL username.")
-	saslPass       = flag.String("sasl-pass", "", "SASL password.")
-	debug          = flag.Bool("debug", false, "Enable debug output.")
-	algorithm      = flag.String("algorithm", "", "The SASL algorithm sha256 or sha512 as mechanism")
+	activeOnly          = flag.Bool("active-only", false, "Show only consumers with an active consumer protocol.")
+	kafkaBrokers        = flag.String("kafka-brokers", "localhost:9092", "Comma separated list of kafka brokers.")
+	prometheusAddr      = flag.String("prometheus-addr", ":7979", "Prometheus listen interface and port.")
+	refreshInt          = flag.Int("refresh-interval", 15, "Time between offset refreshes in seconds.")
+	saslUser            = flag.String("sasl-user", "", "SASL username.")
+	saslPass            = flag.String("sasl-pass", "", "SASL password.")
+	debug               = flag.Bool("debug", false, "Enable debug output.")
+	algorithm           = flag.String("algorithm", "", "The SASL algorithm sha256 or sha512 as mechanism")
+	enableCurrentOffset = flag.Bool("enable-current-offset", false, "Enables metrics for current offset of a consumer group")
 )
 
 type TopicSet map[string]map[int32]int64
@@ -103,6 +104,7 @@ func main() {
 			// forever. Ugly hack to clean up data points from time to time.
 			if cycle >= 99 {
 				OffsetLag.Reset()
+				CurrentOffset.Reset()
 				cycle = 0
 			}
 			cycle++
@@ -171,11 +173,16 @@ func refreshBroker(broker *sarama.Broker, topicSet TopicSet) {
 					if block.Offset >= 0 {
 						// Because our offset operations aren't atomic we could end up with a negative lag
 						lag := math.Max(float64(data[partition]-block.Offset), 0)
-
 						OffsetLag.With(prometheus.Labels{
 							"topic": topic, "group": group,
 							"partition": strconv.FormatInt(int64(partition), 10),
 						}).Set(lag)
+						if *enableCurrentOffset {
+							CurrentOffset.With(prometheus.Labels{
+								"topic": topic, "group": group,
+								"partition": strconv.FormatInt(int64(partition), 10),
+							}).Set(math.Max(float64(block.Offset), 0))
+						}
 					}
 				}
 			}

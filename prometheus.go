@@ -21,6 +21,18 @@ var (
 			"partition",
 		},
 	)
+	//Current state of offset by consumer group
+	CurrentOffset = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "kafka_consumer_group_current_offset",
+			Help: "Current state of offset by consumer group.",
+		},
+		[]string{
+			"topic",
+			"group",
+			"partition",
+		},
+	)
 	// LookupHist is a Prometheus histogram of our kafka offset lookup time
 	LookupHist = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
@@ -33,6 +45,7 @@ var (
 
 func init() {
 	// Metrics have to be registered to be exposed:
+	prometheus.MustRegister(CurrentOffset)
 	prometheus.MustRegister(OffsetLag)
 	prometheus.MustRegister(LookupHist)
 }

@@ -19,6 +19,7 @@ Use the following ENV vars to change the default options:
 * SASL_PASS=SASL password if required (default "")
 * DEBUG=true or false (default false)
 * ALGORITHM=The SASL algorithm sha256 or sha512 as mechanism (default "")
+* ENABLE_CURRENT_OFFSET=Enable current offset consumer group metric (default false)
 
 You may also build and run locally using cli arguments.  See the Dockerfile
 for build instructions.

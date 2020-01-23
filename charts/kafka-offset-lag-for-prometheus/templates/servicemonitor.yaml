@@ -1,0 +1,13 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+{{ include "kafka-offset-lag-for-prometheus.labels" . | indent 4}}
+spec:
+  endpoints:
+  - interval: {{ .Values.refreshIntervalSeconds }}s
+    port: metrics
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}

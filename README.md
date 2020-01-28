@@ -20,6 +20,7 @@ Use the following ENV vars to change the default options:
 * DEBUG=true or false (default false)
 * ALGORITHM=The SASL algorithm sha256 or sha512 as mechanism (default "")
 * ENABLE_CURRENT_OFFSET=Enable current offset consumer group metric (default false)
+* ENABLE_NEW_PROTOCOL=Enables usage of newer Kafka API calls, which allows to report more accurate metrics. For that option you`ll need Kafka of at least v0.10.2.0
 
 You may also build and run locally using cli arguments.  See the Dockerfile
 for build instructions.

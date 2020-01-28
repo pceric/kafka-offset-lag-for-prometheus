@@ -3,9 +3,7 @@ package main
 import (
 	"flag"
 	"log"
-	"math"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,9 +23,8 @@ var (
 	debug               = flag.Bool("debug", false, "Enable debug output.")
 	algorithm           = flag.String("algorithm", "", "The SASL algorithm sha256 or sha512 as mechanism")
 	enableCurrentOffset = flag.Bool("enable-current-offset", false, "Enables metrics for current offset of a consumer group")
+	enableNewProtocol   = flag.Bool("enable-new-protocol", false, "Enables new protocol, which allows to use optimized Kafka API calls. You`ll need Kafka of at least v0.10.2")
 )
-
-type TopicSet map[string]map[int32]int64
 
 func init() {
 	if err := envflag.Parse(); err != nil {
@@ -41,64 +38,26 @@ func init() {
 func main() {
 	go func() {
 		var cycle uint8
-		config := sarama.NewConfig()
-		config.ClientID = "kafka-offset-lag-for-prometheus"
-		config.Version = sarama.V0_9_0_0
-		if *saslUser != "" {
-			config.Net.SASL.Enable = true
-			config.Net.SASL.User = *saslUser
-			config.Net.SASL.Password = *saslPass
+
+		var exporterClient ExporterClient
+		var err error
+
+		if *enableNewProtocol {
+			exporterClient, err = NewExporterClientV2(strings.Split(*kafkaBrokers, ","), getConsumerConfig())
+		} else {
+			exporterClient, err = NewExporterClientV1(strings.Split(*kafkaBrokers, ","), getConsumerConfig())
 		}
-		if *algorithm == "sha512" {
-			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
-			config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA512)
-		} else if *algorithm == "sha256" {
-			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA256} }
-			config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA256)
-		}
-		client, err := sarama.NewClient(strings.Split(*kafkaBrokers, ","), config)
 
 		if err != nil {
 			log.Fatal("Unable to connect to given brokers.")
 		}
 
-		defer client.Close()
+		defer exporterClient.kafkaClient().Close()
 
 		for {
-			topicSet := make(TopicSet)
+
 			time.Sleep(time.Duration(*refreshInt) * time.Second)
 			timer := prometheus.NewTimer(LookupHist)
-			client.RefreshMetadata()
-			// First grab our topics, all partiton IDs, and their offset head
-			topics, err := client.Topics()
-			if err != nil {
-				log.Printf("Error fetching topics: %s", err.Error())
-				continue
-			}
-
-			for _, topic := range topics {
-				// Don't include internal topics
-				if strings.HasPrefix(topic, "__") {
-					continue
-				}
-				partitions, err := client.Partitions(topic)
-				if err != nil {
-					log.Printf("Error fetching partitions: %s", err.Error())
-					continue
-				}
-				if *debug {
-					log.Printf("Found topic '%s' with %d partitions", topic, len(partitions))
-				}
-				topicSet[topic] = make(map[int32]int64)
-				for _, partition := range partitions {
-					toff, err := client.GetOffset(topic, partition, sarama.OffsetNewest)
-					if err != nil {
-						log.Printf("Problem fetching offset for topic '%s', partition '%d'", topic, partition)
-						continue
-					}
-					topicSet[topic][partition] = toff
-				}
-			}
 
 			// Prometheus SDK never TTLs out data points so tmp consumers last
 			// forever. Ugly hack to clean up data points from time to time.
@@ -112,20 +71,13 @@ func main() {
 			var wg sync.WaitGroup
 
 			// Now lookup our group data using the metadata
-			for _, broker := range client.Brokers() {
+			for _, broker := range exporterClient.brokers() {
 				// Sarama plays russian roulette with the brokers
-				broker.Open(client.Config())
-				_, err := broker.Connected()
-				if err != nil {
-					log.Printf("Could not speak to broker %s. Your advertised.listeners may be incorrect.", broker.Addr())
-					continue
-				}
-
 				wg.Add(1)
 
 				go func(broker *sarama.Broker) {
 					defer wg.Done()
-					refreshBroker(broker, topicSet)
+					exporterClient.updateBrokerData(broker)
 				}(broker)
 			}
 
@@ -134,58 +86,4 @@ func main() {
 		}
 	}()
 	prometheusListen(*prometheusAddr)
-}
-
-func refreshBroker(broker *sarama.Broker, topicSet TopicSet) {
-	groupsRequest := new(sarama.ListGroupsRequest)
-	groupsResponse, err := broker.ListGroups(groupsRequest)
-
-	if err != nil {
-		log.Printf("Could not list groups: %s\n", err.Error())
-		return
-	}
-
-	for group, ptype := range groupsResponse.Groups {
-		// do we want to filter by active consumers?
-		if *activeOnly && ptype != "consumer" {
-			continue
-		}
-		// This is not very efficient but the kafka API sucks
-		for topic, data := range topicSet {
-			offsetsRequest := new(sarama.OffsetFetchRequest)
-			offsetsRequest.Version = 1
-			offsetsRequest.ConsumerGroup = group
-			for partition := range data {
-				offsetsRequest.AddPartition(topic, partition)
-			}
-
-			offsetsResponse, err := broker.FetchOffset(offsetsRequest)
-			if err != nil {
-				log.Printf("Could not get offset: %s\n", err.Error())
-			}
-
-			for _, blocks := range offsetsResponse.Blocks {
-				for partition, block := range blocks {
-					if *debug {
-						log.Printf("Discovered group: %s, topic: %s, partition: %d, offset: %d\n", group, topic, partition, block.Offset)
-					}
-					// Offset will be -1 if the group isn't active on the topic
-					if block.Offset >= 0 {
-						// Because our offset operations aren't atomic we could end up with a negative lag
-						lag := math.Max(float64(data[partition]-block.Offset), 0)
-						OffsetLag.With(prometheus.Labels{
-							"topic": topic, "group": group,
-							"partition": strconv.FormatInt(int64(partition), 10),
-						}).Set(lag)
-						if *enableCurrentOffset {
-							CurrentOffset.With(prometheus.Labels{
-								"topic": topic, "group": group,
-								"partition": strconv.FormatInt(int64(partition), 10),
-							}).Set(math.Max(float64(block.Offset), 0))
-						}
-					}
-				}
-			}
-		}
-	}
 }

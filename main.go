@@ -25,6 +25,7 @@ var (
 	debug               = flag.Bool("debug", false, "Enable debug output.")
 	algorithm           = flag.String("algorithm", "", "The SASL algorithm sha256 or sha512 as mechanism")
 	enableCurrentOffset = flag.Bool("enable-current-offset", false, "Enables metrics for current offset of a consumer group")
+	enableNewAPI        = flag.Bool("enable-new-api", false, "Enables new API, which allows to use optimized Kafka API calls")
 )
 
 type TopicSet map[string]map[int32]int64
@@ -44,6 +45,9 @@ func main() {
 		config := sarama.NewConfig()
 		config.ClientID = "kafka-offset-lag-for-prometheus"
 		config.Version = sarama.V0_9_0_0
+		if *enableNewAPI {
+			config.Version = sarama.V0_10_2_0
+		}
 		if *saslUser != "" {
 			config.Net.SASL.Enable = true
 			config.Net.SASL.User = *saslUser
@@ -56,6 +60,7 @@ func main() {
 			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA256} }
 			config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA256)
 		}
+
 		client, err := sarama.NewClient(strings.Split(*kafkaBrokers, ","), config)
 
 		if err != nil {
@@ -125,7 +130,11 @@ func main() {
 
 				go func(broker *sarama.Broker) {
 					defer wg.Done()
-					refreshBroker(broker, topicSet)
+					if *enableNewAPI {
+						refreshBrokerV2(broker, client)
+					} else {
+						refreshBroker(broker, topicSet)
+					}
 				}(broker)
 			}
 
@@ -184,6 +193,58 @@ func refreshBroker(broker *sarama.Broker, topicSet TopicSet) {
 							}).Set(math.Max(float64(block.Offset), 0))
 						}
 					}
+				}
+			}
+		}
+	}
+}
+
+func refreshBrokerV2(broker *sarama.Broker, client sarama.Client) {
+	groupsRequest := new(sarama.ListGroupsRequest)
+	groupsResponse, err := broker.ListGroups(groupsRequest)
+
+	if err != nil {
+		log.Printf("Could not list groups: %s\n", err.Error())
+		return
+	}
+
+	for group, ptype := range groupsResponse.Groups {
+		// do we want to filter by active consumers?
+		if *activeOnly && ptype != "consumer" {
+			continue
+		}
+		offsetsRequest := new(sarama.OffsetFetchRequest)
+		offsetsRequest.Version = 2
+		offsetsRequest.ConsumerGroup = group
+
+		offsetsResponse, err := broker.FetchOffset(offsetsRequest)
+		if err != nil {
+			log.Printf("Could not get offset: %s\n", err.Error())
+		}
+
+		for topic, partitions := range offsetsResponse.Blocks {
+
+			for partition, block := range partitions {
+				if *debug {
+					log.Printf("Discovered group: %s, topic: %s, partition: %d, offset: %d\n", group, topic, partition, block.Offset)
+				}
+
+				partitionLatestOffset, err := client.GetOffset(topic, partition, sarama.OffsetNewest)
+
+				if err != nil {
+					log.Printf("Failed to obtain Latest Offset for topic: %s, partition: %d", topic, partition)
+				}
+
+				lag := math.Max(float64(partitionLatestOffset-block.Offset), 0)
+				OffsetLag.With(prometheus.Labels{
+					"topic": topic, "group": group,
+					"partition": strconv.FormatInt(int64(partition), 10),
+				}).Set(lag)
+				if *enableCurrentOffset {
+					CurrentOffset.With(prometheus.Labels{
+						"topic": topic, "group": group,
+						"partition": strconv.FormatInt(int64(partition), 10),
+					}).Set(math.Max(float64(block.Offset), 0))
 				}
 			}
 		}

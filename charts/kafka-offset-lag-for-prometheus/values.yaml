@@ -7,7 +7,7 @@ fullnameOverride: ""
 replicaCount: 1
 
 #image -- Docker container image
-image: pceric/kafka-offset-lag-for-prometheus:v1.7@sha256:db2c2886bae7fd6086236aae4cef8e0fdd43342e2368e481de740672d0c26ac9
+image: pceric/kafka-offset-lag-for-prometheus:v1.8@sha256:a7628098011572c25dfcbcdc3033b938d5b3a4ba1fb76d3810f3e1b99c7055f6
 #pullPolicy -- Docker container image pull policy
 pullPolicy: IfNotPresent
 

@@ -1,11 +1,6 @@
-FROM golang:1.13
+FROM golang:1.15
 LABEL maintainer "https://hub.docker.com/u/pceric/"
 WORKDIR /go/src/kafka-offset-lag-for-prometheus
-RUN go get -v -u "github.com/Shopify/sarama" \
-              "github.com/kouhin/envflag" \
-              "github.com/prometheus/client_golang/prometheus" \
-              "github.com/prometheus/client_golang/prometheus/promhttp" \
-              "github.com/xdg/scram"
 COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-w -s" -o app
 

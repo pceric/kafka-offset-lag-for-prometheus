@@ -28,7 +28,7 @@ spec:
                 name: {{ .Release.Name }}
                 key: password
           command:
-          - /go/bin/kafka-offset-lag-for-prometheus
+          - /kafka-offset-lag-for-prometheus
           - --prometheus-addr=:{{ .Values.metricsPort }}
           - --refresh-interval={{ .Values.refreshIntervalSeconds }}
       {{- range $key, $value := .Values.containerArgs }}

@@ -5,6 +5,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,6 +27,7 @@ var (
 	algorithm           = flag.String("algorithm", "", "The SASL algorithm sha256 or sha512 as mechanism")
 	enableCurrentOffset = flag.Bool("enable-current-offset", false, "Enables metrics for current offset of a consumer group")
 	enableNewAPI        = flag.Bool("enable-new-api", false, "Enables new API, which allows to use optimized Kafka API calls")
+	groupPattern        = flag.String("group-pattern", "", "Regular expression to filter consumer groups")
 )
 
 type TopicSet map[string]map[int32]int64
@@ -42,6 +44,16 @@ func init() {
 func main() {
 	go func() {
 		var cycle uint8
+
+		var groupRegexp *regexp.Regexp
+		if *groupPattern != "" {
+			var err error
+			groupRegexp, err = regexp.Compile(*groupPattern)
+			if err != nil {
+				log.Fatal("Failed to")
+			}
+		}
+
 		config := sarama.NewConfig()
 		config.ClientID = "kafka-offset-lag-for-prometheus"
 		config.Version = sarama.V0_9_0_0
@@ -131,9 +143,9 @@ func main() {
 				go func(broker *sarama.Broker) {
 					defer wg.Done()
 					if *enableNewAPI {
-						refreshBrokerV2(broker, client)
+						refreshBrokerV2(broker, client, groupRegexp)
 					} else {
-						refreshBroker(broker, topicSet)
+						refreshBroker(broker, topicSet, groupRegexp)
 					}
 				}(broker)
 			}
@@ -145,7 +157,7 @@ func main() {
 	prometheusListen(*prometheusAddr)
 }
 
-func refreshBroker(broker *sarama.Broker, topicSet TopicSet) {
+func refreshBroker(broker *sarama.Broker, topicSet TopicSet, groupRegexp *regexp.Regexp) {
 	groupsRequest := new(sarama.ListGroupsRequest)
 	groupsResponse, err := broker.ListGroups(groupsRequest)
 
@@ -157,6 +169,9 @@ func refreshBroker(broker *sarama.Broker, topicSet TopicSet) {
 	for group, ptype := range groupsResponse.Groups {
 		// do we want to filter by active consumers?
 		if *activeOnly && ptype != "consumer" {
+			continue
+		}
+		if groupRegexp != nil && !groupRegexp.MatchString(group) {
 			continue
 		}
 		// This is not very efficient but the kafka API sucks
@@ -199,7 +214,7 @@ func refreshBroker(broker *sarama.Broker, topicSet TopicSet) {
 	}
 }
 
-func refreshBrokerV2(broker *sarama.Broker, client sarama.Client) {
+func refreshBrokerV2(broker *sarama.Broker, client sarama.Client, groupRegexp *regexp.Regexp) {
 	groupsRequest := new(sarama.ListGroupsRequest)
 	groupsResponse, err := broker.ListGroups(groupsRequest)
 
@@ -211,6 +226,9 @@ func refreshBrokerV2(broker *sarama.Broker, client sarama.Client) {
 	for group, ptype := range groupsResponse.Groups {
 		// do we want to filter by active consumers?
 		if *activeOnly && ptype != "consumer" {
+			continue
+		}
+		if groupRegexp != nil && !groupRegexp.MatchString(group) {
 			continue
 		}
 		offsetsRequest := new(sarama.OffsetFetchRequest)

@@ -50,7 +50,7 @@ func main() {
 			var err error
 			groupRegexp, err = regexp.Compile(*groupPattern)
 			if err != nil {
-				log.Fatal("Failed to")
+				log.Fatal("Failed to compile regex")
 			}
 		}
 

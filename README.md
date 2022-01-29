@@ -21,6 +21,7 @@ Use the following ENV vars to change the default options:
 * ALGORITHM=The SASL algorithm sha256 or sha512 as mechanism (default "")
 * ENABLE_CURRENT_OFFSET=Enable current offset consumer group metric (default false)
 * ENABLE_NEW_API=Enables new API, which allows to use optimized Kafka API calls (default false)
+* GROUP_PATTERN=Regular expression to filter consumer groups (default "")
 
 You may also build and run locally using cli arguments.  See the Dockerfile
 for build instructions.

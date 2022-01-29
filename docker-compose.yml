@@ -1,10 +1,25 @@
-version: '2'
+version: '3.5'
 services:
+    zookeeper:
+      image: zookeeper:3.5
+    kafka:
+      image: wurstmeister/kafka:2.13-2.8.1
+      depends_on:
+        - zookeeper
+      environment:
+        - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+        - KAFKA_LISTENERS=PLAINTEXT://:9092
+        - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
     exporter:
         build:
             context: .
+        depends_on:
+          - kafka
+        restart: on-failure
         environment:
-            - KAFKA_BROKERS=localhost:9092
-            - PROMETHEUS_ADDR=localhost:7979
+            - KAFKA_BROKERS=kafka:9092
+            - PROMETHEUS_ADDR=:7979
             - REFRESH_INTERVAL=15
             - DEBUG=true
+        ports:
+          - "7979:7979"

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"log"
 	"math"
@@ -28,17 +30,49 @@ var (
 	enableCurrentOffset = flag.Bool("enable-current-offset", false, "Enables metrics for current offset of a consumer group")
 	enableNewAPI        = flag.Bool("enable-new-api", false, "Enables new API, which allows to use optimized Kafka API calls")
 	groupPattern        = flag.String("group-pattern", "", "Regular expression to filter consumer groups")
+	certFile            = flag.String("certificate", "", "The optional certificate file for client authentication")
+	keyFile             = flag.String("key", "", "The optional key file for client authentication")
+	caFile              = flag.String("ca", "", "The optional certificate authority file for TLS client authentication")
+	skipVerifySSL       = flag.Bool("skip-verify", false, "Optional verify ssl certificates chain")
+	useTLS              = flag.Bool("tls", false, "Use TLS to communicate with the cluster")
 )
 
 type TopicSet map[string]map[int32]int64
 
 func init() {
 	if err := envflag.Parse(); err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	if *debug {
 		sarama.Logger = log.New(os.Stdout, "[Sarama] ", log.LstdFlags)
 	}
+}
+
+func createTLSConfiguration() (t *tls.Config) {
+	t = &tls.Config{
+		InsecureSkipVerify: *skipVerifySSL,
+	}
+	if *certFile != "" && *keyFile != "" && *caFile != "" {
+		cert, err := tls.LoadX509KeyPair(*certFile, *keyFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		caCert, err := os.ReadFile(*caFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+
+		t = &tls.Config{
+			Certificates:       []tls.Certificate{cert},
+			RootCAs:            caCertPool,
+			InsecureSkipVerify: *skipVerifySSL,
+		}
+	}
+	return t
 }
 
 func main() {
@@ -71,6 +105,10 @@ func main() {
 		} else if *algorithm == "sha256" {
 			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA256} }
 			config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA256)
+		}
+		if *useTLS {
+			config.Net.TLS.Enable = true
+			config.Net.TLS.Config = createTLSConfiguration()
 		}
 
 		client, err := sarama.NewClient(strings.Split(*kafkaBrokers, ","), config)
@@ -109,6 +147,9 @@ func main() {
 				topicSet[topic] = make(map[int32]int64)
 				for _, partition := range partitions {
 					toff, err := client.GetOffset(topic, partition, sarama.OffsetNewest)
+					if *debug {
+						log.Printf("topic:partition:offset %s:%d:%d", topic, partition, toff)
+					}
 					if err != nil {
 						log.Printf("Problem fetching offset for topic '%s', partition '%d'", topic, partition)
 						continue
@@ -169,9 +210,15 @@ func refreshBroker(broker *sarama.Broker, topicSet TopicSet, groupRegexp *regexp
 	for group, ptype := range groupsResponse.Groups {
 		// do we want to filter by active consumers?
 		if *activeOnly && ptype != "consumer" {
+			if *debug {
+				log.Printf("Skipped group %s because it is not a consumer", group)
+			}
 			continue
 		}
 		if groupRegexp != nil && !groupRegexp.MatchString(group) {
+			if *debug {
+				log.Printf("Skipping group '%s' because it does not match regexp '%s'", group, *groupRegexp)
+			}
 			continue
 		}
 		// This is not very efficient but the kafka API sucks

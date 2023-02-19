@@ -1,4 +1,4 @@
-FROM golang:1.16
+FROM golang:1.18
 LABEL maintainer "https://hub.docker.com/u/pceric/"
 WORKDIR /go/src/kafka-offset-lag-for-prometheus
 COPY . .

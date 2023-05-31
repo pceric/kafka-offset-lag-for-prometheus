@@ -40,6 +40,7 @@ var (
 type TopicSet map[string]map[int32]int64
 
 func init() {
+	envflag.SetMinLength(2)
 	if err := envflag.Parse(); err != nil {
 		log.Fatal(err)
 	}

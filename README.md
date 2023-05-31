@@ -23,6 +23,13 @@ Use the following ENV vars to change the default options:
 * ENABLE_NEW_API=Enables new API, which allows to use optimized Kafka API calls (default false)
 * GROUP_PATTERN=Regular expression to filter consumer groups (default "")
 
+For TLS support, you can use the following ENV vars:
+* TLS=true For enabling TLS support (default false)
+* CA=Path to CA file for verifying server certificate (default "")
+* CERTIFICATE=Path to certificate file for client authentication (default "")
+* KEY=Path to key file for client authentication (default "")
+* SKIP_VERIFY=true If you want to skip server certificate verification (default false)
+
 You may also build and run locally using cli arguments.  See the Dockerfile
 for build instructions.
 

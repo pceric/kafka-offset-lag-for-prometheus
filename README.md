@@ -20,7 +20,7 @@ Use the following ENV vars to change the default options:
 * DEBUG=true or false (default false)
 * ALGORITHM=The SASL algorithm sha256 or sha512 as mechanism (default "")
 * ENABLE_CURRENT_OFFSET=Enable current offset consumer group metric (default false)
-* ENABLE_NEW_API=Enables new API, which allows to use optimized Kafka API calls (default false)
+* ENABLE_NEW_API=Enables new API, which allows use of optimized Kafka API calls found in v1.0+ (default false)
 * GROUP_PATTERN=Regular expression to filter consumer groups (default "")
 
 For TLS support, you can use the following ENV vars:

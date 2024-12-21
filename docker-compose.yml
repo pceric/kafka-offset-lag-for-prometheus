@@ -1,4 +1,3 @@
-version: '3.5'
 services:
     zookeeper:
       image: zookeeper:3.5
@@ -10,16 +9,19 @@ services:
         - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
         - KAFKA_LISTENERS=PLAINTEXT://:9092
         - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      healthcheck:
+        test: /opt/kafka/bin/kafka-cluster.sh cluster-id --bootstrap-server kafka:9092 || exit
     exporter:
         build:
-            context: .
+          context: .
         depends_on:
-          - kafka
+          kafka:
+            condition: service_healthy
         restart: on-failure
         environment:
-            - KAFKA_BROKERS=kafka:9092
-            - PROMETHEUS_ADDR=:7979
-            - REFRESH_INTERVAL=15
-            - DEBUG=true
+          - KAFKA_BROKERS=kafka:9092
+          - PROMETHEUS_ADDR=:7979
+          - REFRESH_INTERVAL=15
+          - DEBUG=true
         ports:
           - "7979:7979"

@@ -2,7 +2,7 @@
 Expose Kafka consumer offset lag to prometheus.
 
 ## Requirements
-Kafka v0.9.0.0 or higher.  This exporter will only export offsets
+Kafka v1.0.0 or higher.  This exporter will only export offsets
 stored in Kafka.
 
 ## Getting Started

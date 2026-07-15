@@ -50,8 +50,14 @@ func init() {
 	prometheus.MustRegister(LookupHist)
 }
 
-func prometheusListen(addr string) {
+func prometheusListen(addr string) *http.Server {
 	// Expose the registered metrics via HTTP.
 	http.Handle("/metrics", promhttp.Handler())
-	log.Fatal(http.ListenAndServe(addr, nil))
+	srv := &http.Server{Addr: addr}
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	}()
+	return srv
 }

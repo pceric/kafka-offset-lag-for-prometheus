@@ -1,16 +1,19 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
 	"log"
 	"math"
 	"os"
+	"os/signal"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -196,7 +199,19 @@ func main() {
 			timer.ObserveDuration()
 		}
 	}()
-	prometheusListen(*prometheusAddr)
+
+	srv := prometheusListen(*prometheusAddr)
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+	sig := <-sigCh
+	log.Printf("Received signal %s, shutting down.", sig)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("Error during server shutdown: %s", err.Error())
+	}
 }
 
 func refreshBroker(broker *sarama.Broker, topicSet TopicSet, groupRegexp *regexp.Regexp) {
@@ -218,7 +233,7 @@ func refreshBroker(broker *sarama.Broker, topicSet TopicSet, groupRegexp *regexp
 		}
 		if groupRegexp != nil && !groupRegexp.MatchString(group) {
 			if *debug {
-				log.Printf("Skipping group '%s' because it does not match regexp '%s'", group, *groupRegexp)
+				log.Printf("Skipping group '%s' because it does not match regexp '%s'", group, groupRegexp.String())
 			}
 			continue
 		}

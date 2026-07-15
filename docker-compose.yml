@@ -10,6 +10,7 @@ services:
       depends_on:
         zookeeper:
           condition: service_healthy
+      restart: on-failure
       environment:
         - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
         - KAFKA_LISTENERS=PLAINTEXT://:9092
